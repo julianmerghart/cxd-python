@@ -1,0 +1,65 @@
+import hashlib
+import time
+import secrets
+import json
+
+class CxDNode:
+    def __init__(self, node_id, federation_members):
+        self.node_id = node_id
+        self.federation = federation_members
+        self.ledger = []
+        self.transient_key = secrets.token_hex(32)
+
+    def decrypt_and_validate(self, encrypted_payload):
+        try:
+            raw_data = json.loads(encrypted_payload) 
+            vote_value = raw_data.get("vote")
+            voter_id = raw_data.get("voter_id")
+            
+            is_valid = self.validate_geofence(raw_data.get("location"))
+            
+            if is_valid:
+                print(f"[Node {self.node_id}] Vote Validated.")
+                return vote_value
+            return None
+        finally:
+            voter_id = "00000000" 
+            raw_data = None 
+
+    def validate_geofence(self, location):
+        return location == "Cooper, TX"
+
+    def reach_consensus(self, vote):
+        threshold = (len(self.federation) // 2) + 1
+        votes_received = 1 
+        
+        for peer in self.federation:
+            if peer != self.node_id:
+                votes_received += 1 
+        
+        if votes_received >= threshold:
+            self.commit_to_ledger(vote)
+            return True
+        return False
+
+    def commit_to_ledger(self, vote):
+        entry = {
+            "timestamp": time.time(),
+            "vote": vote,
+            "hash": hashlib.sha256(str(vote).encode()).hexdigest()
+        }
+        self.ledger.append(entry)
+        print(f"SUCCESS: Vote committed to ledger on Node {self.node_id}.")
+
+if __name__ == "__main__":
+    my_node = CxDNode(node_id="Node_A", federation_members=["Node_A", "Node_B", "Node_C", "Node_D"])
+
+    mock_payload = json.dumps({
+        "voter_id": "USER_12345_SECRET",
+        "vote": "YES",
+        "location": "Cooper, TX"
+    })
+
+    validated_vote = my_node.decrypt_and_validate(mock_payload)
+    if validated_vote:
+        my_node.reach_consensus(validated_vote)
